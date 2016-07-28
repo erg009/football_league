@@ -1,0 +1,112 @@
+---
+title: "football_league.Rd"
+output: html_document
+---
+
+
+
+```{r cars}
+library(dplyr)
+library(RSQLite)
+library(DescTools)
+library(tm)
+library(RColorBrewer)
+library(wordcloud)
+library(qtlcharts)
+
+
+con <- dbConnect(SQLite(), dbname="./database.sqlite")
+
+dbListTables(con)
+
+```
+## Getting the Player Details
+
+```{r player details}
+player       <- tbl_df(dbGetQuery(con,"SELECT * FROM player"))
+player_stats <- tbl_df(dbGetQuery(con,"SELECT * FROM player_stats"))
+
+player_stats <- player_stats %>%
+        rename(player_stats_id = id) %>%
+        left_join(player,by= "player_api_id")
+
+
+
+
+```
+
+##Several Observation in date_stat so 
+
+```{r date_state}
+latest_ps <- 
+  player_stats %>% 
+  group_by(player_api_id) %>% 
+  top_n(n = 1, wt = date_stat) %>%
+  as.data.frame()
+
+```
+
+##Finding the top 20 Player Based on Overall Rating
+
+```{r best player}
+best_ps <- latest_ps %>%
+        arrange(desc(overall_rating)) %>%
+        head(n=20) %>%
+        as.data.frame()
+        
+```
+
+##Taking the best details upfront
+
+```{r details}
+library(DT)
+
+best_ps %>%
+        select(player_name,height,ball_control,preferred_foot,sprint_speed,stamina,overall_rating) %>%
+        datatable(., options = list(pageLength = 10))
+
+```
+
+
+## Including Plots
+
+
+```{r pressure, echo=FALSE}
+
+Desc(best_ps$overall_rating,plotit = T)
+
+library(qtlcharts)
+iplotCorr(best_ps[,10:42], reorder=TRUE)
+
+```
+
+Scatter Plots:
+
+```{r scatter plot}
+
+library(ggvis)
+
+measures <- names(best_ps[,10:42])
+
+best_ps %>% 
+  ggvis(x = input_select(measures, label = "Choose the x-axis:", map = as.name)) %>% 
+  layer_points(y = ~overall_rating, fill = ~player_name)
+
+
+```
+
+RADAR CHART:
+
+```{r radar chart}
+library(radarchart)
+library(tidyr)
+radarDF <- best_ps %>% select(player_name, 10:42) %>% as.data.frame()
+radarDF <- gather(radarDF, key=Label, value=Score, -player_name) %>%
+  spread(key=player_name, value=Score)
+chartJSRadar(scores = radarDF, maxScale = 100, showToolTipLabel = TRUE)
+```
+
+
+
+
+
